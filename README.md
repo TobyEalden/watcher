@@ -2,6 +2,14 @@
 
 A native C++ Node module for querying and subscribing to filesystem events. Used by [Parcel 2](https://github.com/parcel-bundler/parcel).
 
+## Fork notes (tdxvolt)
+
+This fork removes Node/N-API types from the core watcher headers so the native
+backends can be built and embedded directly in a standalone C++ application
+without any Node dependency. The changes are limited to `src/Event.hh` and
+`src/Watcher.hh` and preserve the original event semantics while stripping
+JavaScript bindings and N-API specific types.
+
 ## Features
 
 - **Watch** - subscribe to realtime recursive directory change notifications when files or directories are created, updated, or deleted.
