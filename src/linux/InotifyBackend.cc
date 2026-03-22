@@ -1,4 +1,6 @@
 #include <memory>
+#include <cerrno>
+#include <cstring>
 #include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -59,7 +61,7 @@ void InotifyBackend::start() {
 }
 
 InotifyBackend::~InotifyBackend() {
-  write(mPipe[1], "X", 1);
+  (void)write(mPipe[1], "X", 1);
   mEndedSignal.wait();
 }
 
