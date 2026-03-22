@@ -61,7 +61,8 @@ void InotifyBackend::start() {
 }
 
 InotifyBackend::~InotifyBackend() {
-  (void)write(mPipe[1], "X", 1);
+  ssize_t n = write(mPipe[1], "X", 1);
+  (void)n;
   mEndedSignal.wait();
 }
 

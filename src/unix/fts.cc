@@ -1,3 +1,5 @@
+#include <cerrno>
+#include <cstring>
 #include <string>
 
 // weird error on linux

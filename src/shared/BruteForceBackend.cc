@@ -1,3 +1,5 @@
+#include <cerrno>
+#include <cstring>
 #include <string>
 #include "../DirTree.hh"
 #include "../Event.hh"
