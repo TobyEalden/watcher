@@ -1,6 +1,7 @@
 #include <memory>
 #include <cerrno>
 #include <cstring>
+#include <dirent.h>
 #include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -87,6 +88,13 @@ bool InotifyBackend::watchDir(WatcherRef watcher, std::string path, std::shared_
     return false;
   }
 
+  auto range = mSubscriptions.equal_range(wd);
+  for (auto it = range.first; it != range.second; it++) {
+    if (it->second->path == path && it->second->watcher.get() == watcher.get()) {
+      return true;
+    }
+  }
+
   std::shared_ptr<InotifySubscription> sub = std::make_shared<InotifySubscription>();
   sub->tree = tree;
   sub->path = path;
@@ -94,6 +102,45 @@ bool InotifyBackend::watchDir(WatcherRef watcher, std::string path, std::shared_
   mSubscriptions.emplace(wd, sub);
 
   return true;
+}
+
+// inotify is not recursive. Files created in a new directory before this watch
+// is installed are never reported, so emit synthetic creates for whatever is
+// already on disk and watch any child directories.
+void InotifyBackend::scanWatchedDir(WatcherRef watcher, std::string const &path, std::shared_ptr<DirTree> tree) {
+  DIR *dir = opendir(path.c_str());
+  if (!dir) {
+    return;
+  }
+
+  while (struct dirent *entry = readdir(dir)) {
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+      continue;
+    }
+
+    std::string child = path + "/" + entry->d_name;
+    if (watcher->isIgnored(child)) {
+      continue;
+    }
+
+    struct stat st;
+    if (lstat(child.c_str(), &st) != 0) {
+      continue;
+    }
+
+    bool childIsDir = S_ISDIR(st.st_mode);
+    watcher->mEvents.create(child);
+    tree->add(child, CONVERT_TIME(st.st_mtim), childIsDir);
+    if (childIsDir) {
+      if (watchDir(watcher, child, tree)) {
+        scanWatchedDir(watcher, child, tree);
+      } else {
+        tree->remove(child);
+      }
+    }
+  }
+
+  closedir(dir);
 }
 
 void InotifyBackend::handleEvents() {
@@ -184,6 +231,7 @@ bool InotifyBackend::handleSubscription(struct inotify_event *event, std::shared
         sub->tree->remove(path);
         return false;
       }
+      scanWatchedDir(watcher, path, sub->tree);
     }
   } else if (event->mask & (IN_MODIFY | IN_ATTRIB)) {
     watcher->mEvents.update(path);
